@@ -1,15 +1,26 @@
 # Gonorrhea Trends in Santa Cruz County
+# Maria Ma, MPH
+#
 # Excel files will not be shared on the Github as they are not for public use. 
-# Data in the files was picked out of the California Gonorrhea Surveillance System Survey
-# 
+#
+# Data in the files was picked out of the California Gonorrhea Surveillance System Survey (CGSS) and CalREDIE files
+# Used SQL to combine datasets to introduce gender/age information to CGSS. 
+# Datasets were joined on Incident ID numbers, but patient IDs were lost due to it being potentially identifiable.
+# This in particular is unfortunate as I can no longer capture repeat patients like this.
+# Zip code and clinic information was not included on the basis of it being protected health information.
+
+# Data Import ----
+rm(list=ls())
 setwd("~/Documents/Berkeley/Career/SC")
 library(plyr)
-# library(dplyr)
-g2015 <- read.csv("2015_gonorrhea.csv")
-g2016 <- read.csv("2016_gonorrhea.csv")
-g2017 <- read.csv("2017_gonorrhea.csv")
-
-# Label data with years
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+g2015 <- read.csv("2015_gonorrhea.csv", na.strings=c("","NA"),header=TRUE)
+g2016 <- read.csv("2016_gonorrhea.csv", na.strings=c("","NA"),header=TRUE)
+g2017 <- read.csv("2017_gonorrhea.csv", na.strings=c("","NA"),header=TRUE)
+# Data Prep ----
+# Label data with years 
 
 g2015["Year"] <- 2015
 g2016["Year"] <- 2016
@@ -22,37 +33,115 @@ gonorrhea = rbind(g2015, g2016, g2017)
 rm(g2015,g2016,g2017)
 
 # Renaming from the data dictionary
-gonorrhea <- rename(gonorrhea, replace = c(
-                    "Sex_Partner_Gender_._Male" = "partner_male",
-                    "Sex_Partner_Gender_._Female" = "partner_female",              
-                    "Sex_Partner_Gender_._Transgender_.M_to_F." = "partner_mtf",
-                    "Sex_Partner_Gender_._Transgender_.F_to_M." = "partner_ftm",
-                    "Sex_Partner_Gender_._Unknown" = "partner_unk",             
-                    "Sex_Partner_Gender_._Refused" = "partner_ref",
-                    "CGSSPRFPRFSexPart3Mo" = "num_partners",
-                    "CGSSPRFPRFCliHIVTest" = "rec_HIV_test",                   
-                    "CGSSPRFBeh7" = "orientation",                           
-                    "CGSSPRFBeh8Male" = "num_male_part",                     
-                    "CGSSPRFBeh8Fem" = "num_female_part",                           
-                    "CGSSPRFBeh9Bars" = "met_at_bars",                          
-                    "CGSSPRFBeh9BarsVenue" = "which_bars",                     
-                    "CGSSPRFBeh9Bath" = "met_at_bathhouse",                          
-                    "CGSSPRFBeh9BathVenue" = "which_bathhouse",                     
-                    "CGSSPRFBeh9Web" = "met_on_internet",                           
-                    "CGSSPRFBeh9WebVenue" = "where_internet",                      
-                    "CGSSPRFBeh9Oth" = "met_other",                           
-                    "CGSSPRFBeh9OthVenue" = "how_met",                      
-                    "CGSSPRFBeh18" = "last_intercourse",                            
-                    "CGSSPRFBeh24" = "last_partner_again",                            
-                    "CGSSPRFBeh23" = "last_partner_HIV",                            
-                    "CGSSPRFHCExp31" = "HC_symptomatic",                           
-                    "CGSSPRFHCExp32"  = "HC_notified_by_partner",                         
-                    "testinfo" = "HC_received_info",                                 
-                    "toldpart" = "HC_told_partner",                                 
-                    "CGSSPRFHCExp40"  = "HC_prescription_for_partner",                         
-                    "CGSSPRFHCExp40a" = "HC_prescription_who_offered",                         
-                    "CGSSPRFHCExp40b" = "HC_prescription_received",                         
-                    "CGSSPRFHCExp40c" = "HC_prescription_delivered",                         
-                    "CGSSPRFHCExp411" = "HC_partner_treated",                          
-                    "CGSSPRFHCExp412" = "HC_all_partners_treated",                         
-                    "CGSSPRFHCExp42" = "HC_referral_services"))
+gonorrhea <- rename(gonorrhea, 
+       "partner_male"="Sex_Partner_Gender_._Male",
+       "partner_female"="Sex_Partner_Gender_._Female",
+       "partner_mtf"="Sex_Partner_Gender_._Transgender_.M_to_F.",
+       "partner_ftm"="Sex_Partner_Gender_._Transgender_.F_to_M.",
+       "partner_unk"="Sex_Partner_Gender_._Unknown",
+       "partner_ref"="Sex_Partner_Gender_._Refused",
+       "num_partners"="CGSSPRFPRFSexPart3Mo",
+       "rec_HIV_test" ="CGSSPRFPRFCliHIVTest",
+       "orientation"  ="CGSSPRFBeh7",
+       "num_male_part" ="CGSSPRFBeh8Male",
+       "num_female_part"  ="CGSSPRFBeh8Fem",
+       "met_at_bars" ="CGSSPRFBeh9Bars",
+       "which_bars" ="CGSSPRFBeh9BarsVenue",
+       "met_at_bathhouse" ="CGSSPRFBeh9Bath",
+       "which_bathhouse" ="CGSSPRFBeh9BathVenue",
+       "met_on_internet"  ="CGSSPRFBeh9Web",
+       "where_internet"  ="CGSSPRFBeh9WebVenue",
+       "met_other"  ="CGSSPRFBeh9Oth",
+       "how_met"  ="CGSSPRFBeh9OthVenue",
+       "last_intercourse"   ="CGSSPRFBeh18" ,
+       "last_partner_again"   ="CGSSPRFBeh24",
+       "last_partner_HIV"   ="CGSSPRFBeh23",
+       "HC_symptomatic"  ="CGSSPRFHCExp31",
+       "HC_notified_by_partner"="CGSSPRFHCExp32",
+       "HC_received_info"="testinfo",
+       "HC_told_partner"="toldpart",
+       "HC_prescription_for_partner"="CGSSPRFHCExp40",
+       "HC_prescription_who_offered"="CGSSPRFHCExp40a",
+       "HC_prescription_received"="CGSSPRFHCExp40b",
+       "HC_prescription_delivered"="CGSSPRFHCExp40c",
+       "HC_partner_treated" ="CGSSPRFHCExp411",
+       "HC_all_partners_treated"="CGSSPRFHCExp412",
+       "HC_referral_services"="CGSSPRFHCExp42")
+
+# Mapping responses using the CalREDIE data dictionary
+# ( https://www.cdph.ca.gov/Programs/CID/DCDC/CDPH%20Document%20Library/CalREDIE-Data-Dictionary.pdf)
+
+gonorrhea$orientation <- as.factor(mapvalues(gonorrhea$orientation, 
+                                   from = c(1,2,3,4,9), 
+                                   to = c("straight", "gay", "bisexual", "other", "refused")))
+gonorrhea$HC_partner_treated <- as.factor(mapvalues(gonorrhea$HC_partner_treated, 
+                                          from = c(1,2,3,4,9), 
+                                          to = c("yes", "probably", "not sure", "probably not", "refused")))
+gonorrhea$last_intercourse <- as.factor(mapvalues(gonorrhea$last_intercourse, 
+                                                  from = c(1,2,3,4,5,9),
+                                                  to = c("last week", "within last month", "within 2 months", "more than2 months ago", "don't know", "refused")))
+gonorrhea$HC_prescription_who_offered <-as.factor(mapvalues(gonorrhea$HC_prescription_who_offered,
+                                                            from = c(1), 
+                                                            to = ("doctor")))
+
+gonorrhea$HC_all_partners_treated <-as.factor(mapvalues(gonorrhea$HC_all_partners_treated,
+                                                            from = c(1,2,3,4,5,9), 
+                                                            to = c("all treated", "at least one definitely", "at least one probably", "not sure", "probably none", "refused")))
+gonorrhea$last_partner_HIV <-as.factor(mapvalues(gonorrhea$last_partner_HIV,
+                                                        from = c("Y","N","D","R"), 
+                                                        to = c("HIV pos","HIV neg","Do not know", "Refused")))
+gonorrhea$Year <- as.factor(gonorrhea$Year)
+
+gonorrhea$AgeRange <- cut(gonorrhea$Age, 
+                          breaks =c("14","19", "24", "29", "34", "39", "44", "49","54","94"), 
+                          labels =c("Under 19","19-24","25-29","30-34","35-39","40-44","45-49","50-54","55+"),
+                          include.lowest=TRUE)
+
+# "Analysis" ----
+# Mostly just interested in generating a bunch of cross tabs and charts on this.
+# TO DO: add size constraints, generate PDFs as well as images
+# Split analyses into: age/gender, jail, drug use
+# crosstabs so can look at % increases, etc
+# Age Gender ====
+# Total number of gonorrhea diagnoses by year
+plyear <- ggplot(gonorrhea, aes(Year)) + geom_bar(aes(fill=Year))
+plyear <- plyear + labs(x="Year", y= "# of patients", 
+                        title = "Gonorrhea Diagnoses in Santa Cruz County by Year", 
+                        caption = "Data for 2017 only goes until November - aka incomplete") 
+
+# Looking at gonorrhea diagnosis trends by age and by year
+age_year <- ggplot(gonorrhea, aes(AgeRange)) + geom_bar(aes(fill = Year), position = "dodge")
+age_year <- age_year + labs(x = "Age Range", y = "# of patients", 
+                            title = "Gonorrhea Diagnoses in Santa Cruz County by Age and Year",
+                            caption = "Data for 2017 only goes until November - aka incomplete")
+
+# Excluding MTF and FTM for ease of display
+age_year_gender <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male")), aes(AgeRange)) + geom_bar(aes(fill = Year), position = "dodge") + facet_grid(~ Sex)
+age_year_gender <- age_year_gender + labs(x = "Age Range", y = "# of patients", title = "Gonorrhea Diagnoses in Santa Cruz County by Age, Year, and Gender",
+                                          caption = "Data for 2017 only goes until November - aka incomplete")
+
+# gonorrhea by sexual orientations
+age_year_orientation <- ggplot(subset(gonorrhea, orientation %in% c("bisexual","gay","straight","other")), aes(orientation)) + geom_bar(aes(fill = Year), position = "dodge")
+age_year_orientation <- age_year_orientation + labs(x = "Sexual Orientation", y = "# of patients", title = "Gonorrhea Diagnoses in Santa Cruz County by Sexual Orientation, and Year",
+                                                    caption = "Data for 2017 only goes until November - aka incomplete")
+
+#gonorrhea by orientation - looking at gonorrhea rates in only the straight population
+age_year_gender_straight <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male") & orientation == "straight"), aes(AgeRange)) + geom_bar(aes(fill = Year), position = "dodge") + facet_grid(~ Sex)
+age_year_gender_straight <- age_year_gender_straight + labs(x = "Age Range", y = "# of patients", title = "Gonorrhea Diagnoses in Santa Cruz County in persons who identify as Straight",
+                                                            caption = "Data for 2017 only goes until November - aka incomplete")
+
+age_year_gender_gay <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male") & orientation == "gay"), aes(AgeRange)) + geom_bar(aes(fill = Year), position = "dodge") + facet_grid(~ Sex)
+age_year_gender_gay <- age_year_gender_gay + labs(x = "Age Range", y = "# of patients", title = "Gonorrhea Diagnoses in Santa Cruz County in persons who identify as Gay",
+                                                  caption = "Data for 2017 only goes until November - aka incomplete")
+
+#plotlist <- list(plyear, age_year, age_year_gender)
+#pdf("plots_age_gender.pdf", onefile=TRUE)
+#invisible(lapply(plotlist, print))
+#dev.off()
+
+# Jail ====
+
+
+age_notif_year <- as.data.frame(xtabs(~ AgeRange + Year + HC_told_partner, data = gonorrhea))
+
+age_notif_table <- table(gonorrhea$AgeRange, gonorrhea$Year)
