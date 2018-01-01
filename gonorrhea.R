@@ -139,9 +139,34 @@ age_year_gender_gay <- age_year_gender_gay + labs(x = "Age Range", y = "# of pat
 #invisible(lapply(plotlist, print))
 #dev.off()
 
-# Jail ====
+# Jail and Drugs ====
 
+#crack <- gonorrhea %>% group_by(crack) %>% tally()
+#druguse <- gonorrhea %>% count(Year, crack, heroin, meth, inj, AgeRange) %>% filter(crack == "Y" | heroin == "Y" | meth == "Y" | inj == "Y")
 
-age_notif_year <- as.data.frame(xtabs(~ AgeRange + Year + HC_told_partner, data = gonorrhea))
+crack <- gonorrhea %>% count(Year, crack, AgeRange) %>% filter(crack == "Y")
+crack <- rbind(crack,
+               c(2015, 'Y', '40-44', 0),
+               c(2015, 'Y', '45-49', 0),
+               c(2016, 'Y', 'Under 19', 0),
+               c(2016, 'Y', '30-34', 0),
+               c(2016, 'Y', '35-39', 0),
+               c(2016, 'Y', '40-44', 0),
+               c(2016, 'Y', '45-49', 0),
+               c(2017, 'Y', 'Under 19', 0))
+crack$n <- as.numeric(crack$n)
+crackuse <- ggplot(crack, aes(AgeRange,n, fill=Year)) + geom_col(position = "dodge") + ylim(0,6)
+crackuse <- crackuse + labs(x = "Age", y = "# of patients", title = "Crack Use Among Gonorrhea Patients in SCC by Age",
+                                                    caption = "Data for 2017 only goes until November - aka incomplete")
 
-age_notif_table <- table(gonorrhea$AgeRange, gonorrhea$Year)
+meth <- gonorrhea %>% count(Year, meth, AgeRange) %>% filter(meth == "Y")
+meth <- rbind(meth,
+              c(2015, 'Y', '19-24', 0),
+              c(2015, 'Y', '25-29', 0),
+              c(2016, 'Y', '40-44', 0),
+              c(2016, 'Y', '45-49', 0),
+              c(2016, 'Y', '50-54', 0))
+meth$n <- as.numeric(meth$n)
+methuse <- ggplot(meth, aes(AgeRange,n, fill=Year)) + geom_col(position = "dodge") + ylim(0,11)
+methuse <- methuse + labs(x = "Age", y = "# of patients", title = "Meth Use Among Gonorrhea Patients in SCC by Age",
+                            caption = "Data for 2017 only goes until November - aka incomplete")
