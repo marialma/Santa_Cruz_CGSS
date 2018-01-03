@@ -16,6 +16,7 @@ library(plyr)
 library(dplyr)
 library(ggplot2)
 library(gridExtra)
+library(reshape2)
 g2015 <- read.csv("2015_gonorrhea.csv", na.strings=c("","NA"),header=TRUE)
 g2016 <- read.csv("2016_gonorrhea.csv", na.strings=c("","NA"),header=TRUE)
 g2017 <- read.csv("2017_gonorrhea.csv", na.strings=c("","NA"),header=TRUE)
@@ -96,6 +97,9 @@ gonorrhea$AgeRange <- cut(gonorrhea$Age,
                           breaks =c("14","19", "24", "29", "34", "39", "44", "49","54","94"), 
                           labels =c("Under 19","19-24","25-29","30-34","35-39","40-44","45-49","50-54","55+"),
                           include.lowest=TRUE)
+# labels =c("Under 19","19-24","25-29","30-34","35-39","40-44","45-49","50-54","55+"),
+# labels = c(1,2,3,4,5,6,7,8,9),
+
 
 # "Analysis" ----
 # Mostly just interested in generating a bunch of cross tabs and charts on this.
@@ -110,10 +114,13 @@ plyear <- plyear + labs(x="Year", y= "# of patients",
                         caption = "Data for 2017 only goes until November - aka incomplete") 
 
 # Looking at gonorrhea diagnosis trends by age and by year
-age_year <- ggplot(gonorrhea, aes(AgeRange)) + geom_bar(aes(fill = Year), position = "dodge")
+age_year <- ggplot(gonorrhea, aes(AgeRange)) + geom_freqpoly(stat = "count")
 age_year <- age_year + labs(x = "Age Range", y = "# of patients", 
                             title = "Gonorrhea Diagnoses in Santa Cruz County by Age and Year",
                             caption = "Data for 2017 only goes until November - aka incomplete")
+age_year
+
+
 
 # Excluding MTF and FTM for ease of display
 age_year_gender <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male")), aes(AgeRange)) + geom_bar(aes(fill = Year), position = "dodge") + facet_grid(~ Sex)
@@ -139,11 +146,36 @@ age_year_gender_gay <- age_year_gender_gay + labs(x = "Age Range", y = "# of pat
 #invisible(lapply(plotlist, print))
 #dev.off()
 
+
 # Jail and Drugs ====
 
-#crack <- gonorrhea %>% group_by(crack) %>% tally()
-#druguse <- gonorrhea %>% count(Year, crack, heroin, meth, inj, AgeRange) %>% filter(crack == "Y" | heroin == "Y" | meth == "Y" | inj == "Y")
 
+ageyear <- gonorrhea %>% count(Year, AgeRange)
+ageyear$AgeRange <- as.factor(ageyear$AgeRange)
+ay <- melt(ageyear, id.vars = c("AgeRange", "Year"))
+
+# Reference for casting melted dfs in the future
+#agy <- dcast(ay, AgeRange ~ Year, value.var = "value")
+#ay <- melt(agy, id.vars = c("AgeRange"))
+
+age_year <- ggplot(ay, aes(x = AgeRange, y = value, color = Year)) + geom_density()
+age_year
+
+age_year <- age_year + labs(x = "Age Range", y = "# of patients", 
+                            title = "Gonorrhea Diagnoses in Santa Cruz County by Age and Year",
+                            caption = "Data for 2017 only goes until November - aka incomplete")
+age_year
+
+
+
+#crack <- gonorrhea %>% group_by(crack) %>% tally()
+druguse <- gonorrhea %>% count(Year, Sex, jail, prison, crack, heroin, meth, inj, AgeRange) %>% filter(crack == "Y" | heroin == "Y" | meth == "Y" | inj == "Y")
+drugyearchange <- druguse %>% group_by(Year) %>% tally() 
+
+druguse_year <- ggplot(drugyearchange, aes(nn, Year), stat = "identity") + geom_path()
+druguse_year
+
+#drug graphs ----
 crack <- gonorrhea %>% count(Year, crack, AgeRange) %>% filter(crack == "Y")
 crack <- rbind(crack,
                c(2015, 'Y', '40-44', 0),
@@ -170,3 +202,4 @@ meth$n <- as.numeric(meth$n)
 methuse <- ggplot(meth, aes(AgeRange,n, fill=Year)) + geom_col(position = "dodge") + ylim(0,11)
 methuse <- methuse + labs(x = "Age", y = "# of patients", title = "Meth Use Among Gonorrhea Patients in SCC by Age",
                             caption = "Data for 2017 only goes until November - aka incomplete")
+
