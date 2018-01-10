@@ -16,6 +16,7 @@ library(plyr)
 library(dplyr)
 library(ggplot2)
 library(gridExtra)
+library(grid)
 library(reshape2)
 g2015 <- read.csv("2015_gonorrhea.csv", na.strings=c("","NA"),header=TRUE)
 g2016 <- read.csv("2016_gonorrhea.csv", na.strings=c("","NA"),header=TRUE)
@@ -100,7 +101,7 @@ gonorrhea$AgeRange <- cut(gonorrhea$Age,
 # labels =c("Under 19","19-24","25-29","30-34","35-39","40-44","45-49","50-54","55+"),
 # labels = c(1,2,3,4,5,6,7,8,9),
 
-
+yearcolor = c("cadetblue2", "cadetblue3", "cadetblue4")
 # "Analysis"
 # Mostly just interested in generating a bunch of cross tabs and charts on this.
 # TO DO: add size constraints, generate PDFs as well as images
@@ -120,7 +121,7 @@ plyear <- ggplot(gonorrhea, aes(Year)) + geom_point(stat="count") + geom_path(ae
   ylim(0,200) 
 plyear <- plyear + labs(x="Year", y= "# of patients", 
                         title = "Gonorrhea Diagnoses in Santa Cruz County by Year", 
-                        caption = "Data for 2017 only goes until November - aka incomplete") 
+                        caption = "Fig 1 \n") 
 plyear
 
 # DONE Gonorrhea diagnosis trends by age and by year ----
@@ -131,11 +132,11 @@ agy <- dcast(ay, AgeRange ~ Year, value.var = "value")
 ay <- melt(agy, id.vars = c("AgeRange"))
 
 
-agexyear <- ggplot(gonorrhea, aes(AgeRange)) + geom_bar(stat = "count", aes(fill=Year), position="dodge") + 
-  scale_fill_manual(values = c("cadetblue2", "cadetblue3", "cadetblue4"))
+agexyear <- ggplot(subset(gonorrhea, AgeRange != "NA"), aes(AgeRange)) + geom_bar(stat = "count", aes(fill=Year), position="dodge") + 
+  scale_fill_manual(values = yearcolor)
 agexyear <- agexyear + labs(x = "Age Range", y = "# of patients", 
                             title = "Gonorrhea Diagnoses in Santa Cruz County by Age and Year",
-                            caption = "Data for 2017 only goes until November - aka incomplete")
+                            caption = "Fig 2") + theme_bw()
 agexyear
 # DONE line graph for age - maybe discard? ----
 ay <- ay[complete.cases(ay),]
@@ -179,13 +180,13 @@ agesl <- agesl + xlab("") + ylab("Age Range") +
   theme(axis.ticks=element_blank()) +
   theme(axis.text=element_blank()) + 
   theme(panel.border=element_blank()) + xlim(-10,60) + ylim(0, 50)
-agesl <- agesl + geom_text(label = l15, aes(y=agy$"2015", x=0), size = 3, hjust = 1.1) +
-  geom_text(label = l16, aes(y=agy$"2016", x=25), size = 3) +
-  geom_text(label = l17, aes(y=agy$"2017", x=50), size = 3, hjust = -.1) +
+agesl <- agesl + geom_text(label = l15, aes(y=agy$"2015", x=0), size = 2.5, hjust = 1.1) +
+  geom_text(label = l16, aes(y=agy$"2016", x=25), size = 2.5) +
+  geom_text(label = l17, aes(y=agy$"2017", x=50), size = 2.5, hjust = -.1) +
   geom_text(label = "2015", x = 0, y = (1.1*(max(agy$"2016"))), size = 4, hjust = 1.2, color = "cadetblue2") +
   geom_text(label = "2016", x = 25, y = (1.1*(max(agy$"2016"))), size = 4, color = "cadetblue3") +
   geom_text(label = "2017", x = 50, y = (1.1*(max(agy$"2016"))), size = 4, hjust = -.05, color = "cadetblue4") +
-  labs(title = "Change in # of diagnoses for each age group by year", caption = "Data for 2017 only goes until November - aka incomplete")
+  labs(caption = "Data for 2017 only goes until November - aka incomplete")
 agesl
 rm(l15,l16,l17)
 
@@ -261,6 +262,30 @@ rm(fl15, fl16, fl17, ml15, ml16, ml17)
 
 # PRINT PDF ----
 
+agetextwrap <- strwrap(c("Fig 2 shows the age distribution of gonorrhea infections by year.
+                         Infections in an older population have increased over the last two years. 
+                         \n \n Fig 3 shows the change in diagnoses for each age group over the years.
+                         The table below contains the appropriate information"), width = 40, simplify = FALSE)
+agetextwrap <- sapply(agetextwrap, paste, collapse = "\n")
+agetext <- textGrob(agetextwrap, gp=gpar(fontsize=9), vjust = 0)
+ 
+agetable <- agy[1:4]
+agetable <- grid.table(agetable)
+#agelayout <- rbind(c(1,1,1),
+#                   c(1,1,1),
+#                   c(2,2,3),
+#                   c(2,2,3),
+#                   c(2,2,3))
+agel <- grid.arrange(arrangeGrob(agexyear, ncol=1, nrow = 1), 
+                     arrangeGrob(agesl, arrangeGrob(agetext, tableGrob(agetable), nrow =2, ncol = 1, heights = 3:2), 
+                                 ncol = 2, nrow = 1, widths = 3:2), 
+                     heights = c(5,7), widths = c(3))
+pdf(file = "age1.pdf", paper = "letter")
+plot(agel)
+dev.off()
+
+ggsave("age.pdf",agel, width = 8.5, height = 11, units = "in")
+
 pdf(file = "age_gender_year.pdf", title="Gonorrhea Incidence, Santa Cruz County 2015-2017, Age and Gender", paper = "letter")
 plot(plyear) 
 plot(agexyear)
@@ -271,10 +296,30 @@ plot(sy_male)
 dev.off()
 
 # gonorrhea by sexual orientations ----
-age_year_orientation <- ggplot(subset(gonorrhea, orientation %in% c("bisexual","gay","straight","other")), aes(orientation)) + geom_bar(aes(fill = Year), position = "dodge")
+age_year_orientation <- ggplot(subset(gonorrhea, orientation %in% c("bisexual","gay","straight","other")), aes(orientation)) + 
+  geom_bar(aes(fill = Year), position = "dodge") + scale_x_discrete(limits = c("straight","gay", "bisexual","other")) +
+  scale_fill_manual(values = yearcolor) + theme_bw()
 age_year_orientation <- age_year_orientation + labs(x = "Sexual Orientation", y = "# of patients", title = "Gonorrhea Diagnoses in Santa Cruz County by Sexual Orientation, and Year",
                                                     caption = "Data for 2017 only goes until November - aka incomplete")
 age_year_orientation
+
+oriyear <- gonorrhea %>% count(Year, AgeRange, orientation)
+oriyear <- oriyear[complete.cases(oriyear[, 2]),]
+oriyear[is.na(oriyear)]<- "refused"
+oy <- melt(oriyear, id.vars = c("AgeRange", "Year", "orientation"))
+ogy <- dcast(oy, AgeRange + orientation ~ Year, value.var = "value", fun.aggregate = sum)
+
+ory <- dcast(oy, orientation ~ Year, value.var = "value", fun.aggregate = sum)
+ory$pc2016 <- round((ory$`2016`/ory$`2015`)*100) - 100
+ory$pc2017 <- round((ory$`2017`/ory$`2016`)*100) - 100
+
+ory <- melt(ory, id.vars = c("orientation", '2015', '2016','2017'))
+
+oripct <- ggplot(ory, aes(orientation, value)) + 
+  geom_col(aes(fill = variable), position = "dodge") + facet_grid(. ~ variable) +
+  scale_x_discrete(limits = c("straight","gay", "bisexual","other","refused")) +
+  theme_bw() 
+oripct
 #gonorrhea by orientation - looking at gonorrhea rates in only the straight population ----
 age_year_gender_straight <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male") & orientation == "straight"), aes(AgeRange)) + 
   geom_bar(aes(fill = Year), position = "dodge") +  facet_grid(~ Sex) +
