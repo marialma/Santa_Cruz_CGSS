@@ -303,24 +303,39 @@ age_year_orientation <- age_year_orientation + labs(x = "Sexual Orientation", y 
                                                     caption = "Data for 2017 only goes until November - aka incomplete")
 age_year_orientation
 
-oriyear <- gonorrhea %>% count(Year, AgeRange, orientation)
+oriyear <- gonorrhea %>% count(Year, AgeRange, Sex, orientation)
 oriyear <- oriyear[complete.cases(oriyear[, 2]),]
 oriyear[is.na(oriyear)]<- "refused"
-oy <- melt(oriyear, id.vars = c("AgeRange", "Year", "orientation"))
-ogy <- dcast(oy, AgeRange + orientation ~ Year, value.var = "value", fun.aggregate = sum)
-
+oy <- melt(oriyear, id.vars = c("AgeRange", "Year", "Sex","orientation"))
+ogy <- dcast(oy, AgeRange + Sex + orientation ~ Year, value.var = "value", fun.aggregate = sum)
 ory <- dcast(oy, orientation ~ Year, value.var = "value", fun.aggregate = sum)
-ory$pc2016 <- round((ory$`2016`/ory$`2015`)*100) - 100
-ory$pc2017 <- round((ory$`2017`/ory$`2016`)*100) - 100
 
-ory <- melt(ory, id.vars = c("orientation", '2015', '2016','2017'))
+# slope graph
+l15 <- paste(ory$orientation, "(",round(ory$"2015"), ")")
+l16 <- paste("(",round(ory$"2016"),")")
+l17 <- paste(ory$orientation,"(",round(ory$"2017"), ")")
 
-oripct <- ggplot(ory, aes(orientation, value)) + 
-  geom_col(aes(fill = variable), position = "dodge") + facet_grid(. ~ variable) +
-  scale_x_discrete(limits = c("straight","gay", "bisexual","other","refused")) +
-  theme_bw() 
-oripct
-#gonorrhea by orientation - looking at gonorrhea rates in only the straight population ----
+orisl <- ggplot(ory) + geom_segment(aes(x=0, xend= 25, y=ory$"2015", yend=ory$"2016", color=orientation), size=.75) + 
+  geom_segment(aes(x=25, xend= 50, y=ory$"2016", yend=ory$"2017", color=orientation), size=.75) +
+  scale_color_manual(limits = c("straight","gay", "bisexual","other","refused"), values =c("goldenrod3","violetred4", "darkseagreen4", "snow4","lightsteelblue3"))
+orisl <- orisl + xlab("") + ylab("Orientation") +
+  theme(panel.background = element_blank()) +
+  theme(panel.grid=element_blank()) +
+  theme(axis.ticks=element_blank()) +
+  theme(axis.text=element_blank()) + 
+  theme(panel.border=element_blank()) + xlim(-10,60) + ylim(0, 130)
+orisl <- orisl + geom_text(label = l15, aes(y=ory$"2015", x=0), size = 2.5, hjust = 1.1) +
+  geom_text(label = l16, aes(y=ory$"2016", x=25), size = 2.5) +
+  geom_text(label = l17, aes(y=ory$"2017", x=50), size = 2.5, hjust = -.1) +
+  geom_text(label = "2015", x = 0, y = (1.1*(max(ory$"2016"))), size = 4, hjust = 1.2, color = "cadetblue2") +
+  geom_text(label = "2016", x = 25, y = (1.1*(max(ory$"2016"))), size = 4, color = "cadetblue3") +
+  geom_text(label = "2017", x = 50, y = (1.1*(max(ory$"2016"))), size = 4, hjust = -.05, color = "cadetblue4") +
+  labs(caption = "Data for 2017 only goes until November - aka incomplete") 
+orisl
+rm(l15,l16,l17)
+
+
+# gonorrhea by orientation - looking at gonorrhea rates in only the straight population ----
 age_year_gender_straight <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male") & orientation == "straight"), aes(AgeRange)) + 
   geom_bar(aes(fill = Year), position = "dodge") +  facet_grid(~ Sex) +
   scale_fill_manual(values = c("cadetblue2", "cadetblue3", "cadetblue4"))
@@ -334,7 +349,7 @@ age_year_gender_gay <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male") & or
 age_year_gender_gay <- age_year_gender_gay + labs(x = "Age Range", y = "# of patients", title = "Gonorrhea Diagnoses in Santa Cruz County in persons who identify as Gay",
                                                   caption = "Data for 2017 only goes until November - aka incomplete")
 
-age_year_gender_gay <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male") & orientation == "bisexual"), aes(AgeRange)) + 
+age_year_gender_bis <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male") & orientation == "bisexual"), aes(AgeRange)) + 
   geom_bar(aes(fill = Year), position = "dodge") +   facet_grid(~ Sex) + 
   scale_fill_manual(values = c("cadetblue2", "cadetblue3", "cadetblue4"))
 age_year_gender_gay <- age_year_gender_gay + labs(x = "Age Range", y = "# of patients", title = "Gonorrhea Diagnoses in Santa Cruz County in persons who identify as Gay",
@@ -345,6 +360,9 @@ age_year_gender_gay
 #pdf("plots_age_gender.pdf", onefile=TRUE)
 #invisible(lapply(plotlist, print))
 #dev.off()
+
+
+
 
 
 
