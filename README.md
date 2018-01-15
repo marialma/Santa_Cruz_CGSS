@@ -17,3 +17,7 @@ The groupings that I hope to look at are:
   * Websites/app trends?
 
 I will share the results after getting approval to do so.
+
+
+Additional thoughts: 
+* Can I do a regression?
