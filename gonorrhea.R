@@ -191,12 +191,49 @@ agesl
 rm(l15,l16,l17)
 
 # DONE gender bar graph. Excluding MTF and FTM for ease of display ----
-age_year_gender <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male")), aes(AgeRange)) + 
+ageyg <- na.omit(transmute(gonorrhea, Sex, AgeRange, Year))
+
+ageyg_mut <- transmute(ageyg, Sex, Year)
+ageyg_mut2 <- melt(ageyg_mut, id.vars = c("Year", "Sex"))
+ageyg_mut <- melt(ageyg_mut, id.vars = c("Year", "Sex"))
+ageyg_mut <- dcast(ageyg_mut, Year ~ Sex, value.var = "Sex")
+ageyg_mut <- mutate(ageyg_mut, Total = Female + Male, "Percent Female" = round(Female / Total, digits = 2),
+                    "Percent Male" = round(Male/Total, digits = 2))
+ageyg_mut2 <- dcast(ageyg_mut2, Sex ~ Year, value.var = "Year")
+
+ageygstats <- na.omit(transmute(gonorrhea, Sex, Age, Year, orientation))
+ageygstats <- subset(ageygstats, Sex %in% c("Female", "Male") & orientation == "straight")
+
+ageygstats2015 <- subset(ageygstats, Year %in% "2015")
+s15male <- subset(ageygstats2015, Sex %in% "Male")
+s15female <- subset(ageygstats2015, Sex %in% "Female")
+summary(s15female)
+summary(s15male)
+
+
+ageygstats2016 <- subset(ageygstats, Year %in% "2016")
+s16male <- subset(ageygstats2016, Sex %in% "Male")
+s16female <- subset(ageygstats2016, Sex %in% "Female")
+summary(s16female)
+summary(s16male)
+
+ageygstats2017 <- subset(ageygstats, Year %in% "2017")
+s17male <- subset(ageygstats2017, Sex %in% "Male")
+s17female <- subset(ageygstats2017, Sex %in% "Female")
+test <- summary(s17female)
+summary(s17male)
+
+year_gender <- ggplot(ageyg, aes(Year)) + geom_bar(aes(fill=Sex), position = "dodge") +
+  scale_fill_manual(values = c("tomato3", "yellowgreen"))
+
+age_year_gender <- ggplot(ageyg, aes(AgeRange)) + 
   geom_bar(aes(fill = Year), position = "dodge") + facet_grid(~ Sex) +
   scale_fill_manual(values = c("cadetblue2", "cadetblue3", "cadetblue4"))
 age_year_gender <- age_year_gender + labs(x = "Age Range", y = "# of patients", title = "Gonorrhea Diagnoses in Santa Cruz County by Age, Year, and Gender",
                                           caption = "Data for 2017 only goes until November - aka incomplete")
-age_year_gender
+
+ageyg <- subset(ageyg, Sex %in% c("Female", "Male"))
+
 
 
 # DONE slope charts split by gender ----
@@ -260,40 +297,19 @@ sy_male
 rm(fl15, fl16, fl17, ml15, ml16, ml17)
 
 
-# PRINT PDF ----
-
-agetextwrap <- strwrap(c("Fig 2 shows the age distribution of gonorrhea infections by year.
-                         Infections in an older population have increased over the last two years. 
-                         \n \n Fig 3 shows the change in diagnoses for each age group over the years.
-                         The table below contains the appropriate information"), width = 40, simplify = FALSE)
-agetextwrap <- sapply(agetextwrap, paste, collapse = "\n")
-agetext <- textGrob(agetextwrap, gp=gpar(fontsize=9), vjust = 0)
- 
-agetable <- agy[1:4]
-agetable <- grid.table(agetable)
+# misc attempts to arrange things. saving it here for future reference. ----
+#agetable <- agy[1:4]
+#agetable <- grid.table(agetable)
 #agelayout <- rbind(c(1,1,1),
 #                   c(1,1,1),
 #                   c(2,2,3),
 #                   c(2,2,3),
 #                   c(2,2,3))
-agel <- grid.arrange(arrangeGrob(agexyear, ncol=1, nrow = 1), 
-                     arrangeGrob(agesl, arrangeGrob(agetext, tableGrob(agetable), nrow =2, ncol = 1, heights = 3:2), 
-                                 ncol = 2, nrow = 1, widths = 3:2), 
-                     heights = c(5,7), widths = c(3))
-pdf(file = "age1.pdf", paper = "letter")
-plot(agel)
-dev.off()
+#agel <- grid.arrange(arrangeGrob(agexyear, ncol=1, nrow = 1), 
+#                     arrangeGrob(agesl, arrangeGrob(agetext, tableGrob(agetable), nrow =2, ncol = 1, heights = 3:2), 
+#                                 ncol = 2, nrow = 1, widths = 3:2), 
+#                     heights = c(5,7), widths = c(3))
 
-ggsave("age.pdf",agel, width = 8.5, height = 11, units = "in")
-
-pdf(file = "age_gender_year.pdf", title="Gonorrhea Incidence, Santa Cruz County 2015-2017, Age and Gender", paper = "letter")
-plot(plyear) 
-plot(agexyear)
-plot(agesl)
-plot(age_year_gender)
-plot(sy_female)
-plot(sy_male)
-dev.off()
 
 # gonorrhea by sexual orientations ----
 age_year_orientation <- ggplot(subset(gonorrhea, orientation %in% c("bisexual","gay","straight","other")), aes(orientation)) + 
@@ -310,7 +326,7 @@ oy <- melt(oriyear, id.vars = c("AgeRange", "Year", "Sex","orientation"))
 ogy <- dcast(oy, AgeRange + Sex + orientation ~ Year, value.var = "value", fun.aggregate = sum)
 ory <- dcast(oy, orientation ~ Year, value.var = "value", fun.aggregate = sum)
 
-# slope graph
+# slope graph ----
 l15 <- paste(ory$orientation, "(",round(ory$"2015"), ")")
 l16 <- paste("(",round(ory$"2016"),")")
 l17 <- paste(ory$orientation,"(",round(ory$"2017"), ")")
