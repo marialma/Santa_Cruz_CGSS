@@ -1,0 +1,367 @@
+---
+title: "Gonorrhea Trends in Santa Cruz County 2015 - 2017"
+author: "Maria Ma, MPH"
+date: "1/8/2018"
+output: pdf_document
+---
+
+```{r include=FALSE}
+# knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+setwd("~/Documents/Berkeley/Career/SC")
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+library(reshape2)
+library(knitr)
+library(kableExtra)
+```
+
+# Part 1: Age, Gender, Orientation
+
+This report uses data from the California Gonorrhea Surveillance Survey (CGSS), a survey given to individuals diagnosed with gonorrhea. It looks specifically at CGSS respondents from Santa Cruz County, from 2015 to 2017. Note that the data for 2017 is incomplete and ends 2 months before the end of the year. Once updated data is available, this report can be subsequently updated.
+
+  
+```{r include=FALSE}
+g2015 <- read.csv("2015_gonorrhea.csv", na.strings=c("","NA"),header=TRUE)
+g2016 <- read.csv("2016_gonorrhea.csv", na.strings=c("","NA"),header=TRUE)
+g2017 <- read.csv("2017_gonorrhea.csv", na.strings=c("","NA"),header=TRUE)
+# Data Prep ----
+# Label data with years 
+
+g2015["Year"] <- 2015
+g2016["Year"] <- 2016
+g2017["Year"] <- 2017
+
+# Bind all together into one file
+gonorrhea = rbind(g2015, g2016, g2017)
+
+# Clean workspace
+rm(g2015,g2016,g2017)
+
+# Renaming from the data dictionary
+gonorrhea <- rename(gonorrhea, 
+       "partner_male"="Sex_Partner_Gender_._Male",
+       "partner_female"="Sex_Partner_Gender_._Female",
+       "partner_mtf"="Sex_Partner_Gender_._Transgender_.M_to_F.",
+       "partner_ftm"="Sex_Partner_Gender_._Transgender_.F_to_M.",
+       "partner_unk"="Sex_Partner_Gender_._Unknown",
+       "partner_ref"="Sex_Partner_Gender_._Refused",
+       "num_partners"="CGSSPRFPRFSexPart3Mo",
+       "rec_HIV_test" ="CGSSPRFPRFCliHIVTest",
+       "orientation"  ="CGSSPRFBeh7",
+       "num_male_part" ="CGSSPRFBeh8Male",
+       "num_female_part"  ="CGSSPRFBeh8Fem",
+       "met_at_bars" ="CGSSPRFBeh9Bars",
+       "which_bars" ="CGSSPRFBeh9BarsVenue",
+       "met_at_bathhouse" ="CGSSPRFBeh9Bath",
+       "which_bathhouse" ="CGSSPRFBeh9BathVenue",
+       "met_on_internet"  ="CGSSPRFBeh9Web",
+       "where_internet"  ="CGSSPRFBeh9WebVenue",
+       "met_other"  ="CGSSPRFBeh9Oth",
+       "how_met"  ="CGSSPRFBeh9OthVenue",
+       "last_intercourse"   ="CGSSPRFBeh18" ,
+       "last_partner_again"   ="CGSSPRFBeh24",
+       "last_partner_HIV"   ="CGSSPRFBeh23",
+       "HC_symptomatic"  ="CGSSPRFHCExp31",
+       "HC_notified_by_partner"="CGSSPRFHCExp32",
+       "HC_received_info"="testinfo",
+       "HC_told_partner"="toldpart",
+       "HC_prescription_for_partner"="CGSSPRFHCExp40",
+       "HC_prescription_who_offered"="CGSSPRFHCExp40a",
+       "HC_prescription_received"="CGSSPRFHCExp40b",
+       "HC_prescription_delivered"="CGSSPRFHCExp40c",
+       "HC_partner_treated" ="CGSSPRFHCExp411",
+       "HC_all_partners_treated"="CGSSPRFHCExp412",
+       "HC_referral_services"="CGSSPRFHCExp42")
+
+# Mapping responses using the CalREDIE data dictionary
+# ( https://www.cdph.ca.gov/Programs/CID/DCDC/CDPH%20Document%20Library/CalREDIE-Data-Dictionary.pdf)
+
+gonorrhea$orientation <- as.factor(mapvalues(gonorrhea$orientation, 
+                                   from = c(1,2,3,4,9), 
+                                   to = c("straight", "gay", "bisexual", "other", "refused")))
+gonorrhea$HC_partner_treated <- as.factor(mapvalues(gonorrhea$HC_partner_treated, 
+                                          from = c(1,2,3,4,9), 
+                                          to = c("yes", "probably", "not sure", "probably not", "refused")))
+gonorrhea$last_intercourse <- as.factor(mapvalues(gonorrhea$last_intercourse, 
+                                                  from = c(1,2,3,4,5,9),
+                                                  to = c("last week", "within last month", "within 2 months", "more than2 months ago", "don't know", "refused")))
+gonorrhea$HC_prescription_who_offered <-as.factor(mapvalues(gonorrhea$HC_prescription_who_offered,
+                                                            from = c(1), 
+                                                            to = ("doctor")))
+
+gonorrhea$HC_all_partners_treated <-as.factor(mapvalues(gonorrhea$HC_all_partners_treated,
+                                                            from = c(1,2,3,4,5,9), 
+                                                            to = c("all treated", "at least one definitely", "at least one probably", "not sure", "probably none", "refused")))
+gonorrhea$last_partner_HIV <-as.factor(mapvalues(gonorrhea$last_partner_HIV,
+                                                        from = c("Y","N","D","R"), 
+                                                        to = c("HIV pos","HIV neg","Do not know", "Refused")))
+gonorrhea$Year <- as.factor(gonorrhea$Year)
+
+gonorrhea$AgeRange <- cut(gonorrhea$Age, 
+                          breaks =c("14","19", "24", "29", "34", "39", "44", "49","54","94"), 
+                          labels =c("Under 19","19-24","25-29","30-34","35-39","40-44","45-49","50-54","55+"),
+                          include.lowest=TRUE)
+# labels =c("Under 19","19-24","25-29","30-34","35-39","40-44","45-49","50-54","55+"),
+# labels = c(1,2,3,4,5,6,7,8,9),
+
+# Themes ----
+titletheme <- theme(plot.title = element_text(hjust=0, vjust=0, family= "Helvetica"), 
+                    axis.text.x = element_text(colour="black", family = "Helvetica", angle = 45, hjust = 1),
+                    axis.text.y = element_text(colour="black", family = "Helvetica"),
+                    text = element_text(family="Helvetica"),
+                    legend.title = element_text(colour="black", family = "Helvetica"))
+th <- theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+            panel.background = element_blank(), axis.line = element_line(colour = "black"))
+yearcolor <-  scale_fill_manual(values = c("cadetblue2", "cadetblue3", "cadetblue4"))
+# DONE Total number of gonorrhea diagnoses by year ----
+plyear <- ggplot(gonorrhea, aes(Year)) + geom_point(stat="count") + geom_path(aes(group = 1), color ="turquoise4", stat = "count") +
+  ylim(0,200) 
+plyear <- plyear + labs(x="Year", y= "# of patients", 
+                        title = "Gonorrhea Diagnoses in Santa Cruz County by Year") + th + titletheme
+
+# DONE Gonorrhea diagnosis trends by age and by year ----
+ageyear <- gonorrhea %>% count(Year, AgeRange)
+ageyear$AgeRange <- as.factor(ageyear$AgeRange)
+ay <- melt(ageyear, id.vars = c("AgeRange", "Year"))
+agy <- dcast(ay, AgeRange ~ Year, value.var = "value")
+ay <- melt(agy, id.vars = c("AgeRange"))
+
+ageandyear <- na.omit(transmute(gonorrhea, AgeRange, Year))
+agexyear <- ggplot(ageandyear, aes(AgeRange)) + geom_bar(stat = "count", aes(fill=Year), position="dodge") + 
+  yearcolor + labs(x = "Age Range", y = "# of patients", 
+                            title = "Gonorrhea Diagnoses in Santa Cruz County by Age") + th + titletheme
+
+# DONE slope graph ----
+agy <- agy[complete.cases(agy),]
+rownames(agy) <- 1:nrow(agy)
+
+l15 <- paste(agy$AgeRange, "(",round(agy$"2015"), ")")
+l16 <- paste("(",round(agy$"2016"),")")
+l17 <- paste("(",round(agy$"2017"), ")")
+
+agesl <- ggplot(agy) + geom_segment(aes(x=0, xend= 25, y=agy$"2015", yend=agy$"2016", color=AgeRange), size=.75) + 
+  geom_segment(aes(x=25, xend= 50, y=agy$"2016", yend=agy$"2017", color=AgeRange), size=.75) +
+  scale_color_manual(values =c("lightsteelblue1", "lightsteelblue2", "lightsteelblue3","plum1", "plum2", "plum3", "plum4", "palegreen2", "palegreen3"))
+agesl <- agesl + xlab("") + ylab("") +
+  theme(panel.background = element_blank()) +
+  theme(panel.grid=element_blank()) +
+  theme(axis.ticks=element_blank()) +
+  theme(axis.text=element_blank()) + 
+  theme(panel.border=element_blank()) + xlim(-15,60) + ylim(0, 45)
+agesl <- agesl + geom_text(label = l15, aes(y=agy$"2015", x=0), size = 2.5, hjust = 1.1) +
+  geom_text(label = l16, aes(y=agy$"2016", x=25), size = 2.5) +
+  geom_text(label = l17, aes(y=agy$"2017", x=50), size = 2.5, hjust = -.1) +
+  geom_text(label = "2015", x = 0, y = (1.1*(max(agy$"2016"))), size = 4, hjust = 1.2, color = "cadetblue2") +
+  geom_text(label = "2016", x = 25, y = (1.1*(max(agy$"2016"))), size = 4, color = "cadetblue3") +
+  geom_text(label = "2017", x = 50, y = (1.1*(max(agy$"2016"))), size = 4, hjust = -.05, color = "cadetblue4") + theme(legend.position="none") +  labs(title = "Age group changes over time") + theme(plot.title = element_text(hjust=0.5, vjust=0, color = "black", family= "Helvetica"))
+rm(l15,l16,l17)
+
+
+# DONE slope charts split by gender ----
+sexyear <- gonorrhea %>% count(Year, AgeRange, Sex)
+sexyear$AgeRange <- as.factor(sexyear$AgeRange)
+sy_f <- subset(sexyear, Sex %in% c("Female"))
+sy_f <- na.omit(sy_f, cols = sy_f$AgeRange)
+sy_wf <- dcast(sy_f, AgeRange + Sex ~ Year, value.var = "n") # [s]ex[y]ear_[w]ideform[f]emale
+
+#labels for slope chart
+fl15 <- paste(sy_wf$AgeRange, "(",round(sy_wf$"2015"), ")")
+fl16 <- paste("(",round(sy_wf$"2016"),")")
+fl17 <- paste("(",round(sy_wf$"2017"), ")")
+
+#slopechart
+sy_female <- ggplot(sy_wf) + geom_segment(aes(x=0, xend= 25, y=sy_wf$"2015", yend=sy_wf$"2016", color=AgeRange), size=.75) + 
+  geom_segment(aes(x=25, xend= 50, y=sy_wf$"2016", yend=sy_wf$"2017", color=AgeRange), size=.75) +
+  scale_color_manual(values =c("lightsteelblue1", "lightsteelblue2", "lightsteelblue3","plum1", "plum2", "plum3", "plum4", "palegreen2", "palegreen3"))
+sy_female <- sy_female + xlab("") + ylab("Age Range") +
+  theme(panel.background = element_blank()) +
+  theme(panel.grid=element_blank()) +
+  theme(axis.ticks=element_blank()) +
+  theme(axis.text=element_blank())+
+  theme(panel.border=element_blank()) + xlim(-10,60) + ylim(0, 33) + 
+  geom_text(label = fl15, aes(y=sy_wf$"2015", x=0), size = 3, hjust = 1.1) +
+  geom_text(label = fl16, aes(y=sy_wf$"2016", x=25), size = 3) +
+  geom_text(label = fl17, aes(y=sy_wf$"2017", x=50), size = 3, hjust = -.1) +
+  geom_text(label = "2015", x = 0, y = 33, size = 4, hjust = 1.2, color = "cadetblue2") +
+  geom_text(label = "2016", x = 25, y = 33, size = 4, color = "cadetblue3") +
+  geom_text(label = "2017", x = 50, y = 33, size = 4, hjust = -.05, color = "cadetblue4") +
+  labs(title = "Change in # of diagnoses for each age group for females", caption = "Data for 2017 only goes until November - aka incomplete")
+sy_m <- subset(sexyear, Sex %in% c("Male"))
+sy_m <- na.omit(sy_m, cols = sy_m$AgeRange)
+sy_wm <- dcast(sy_m, AgeRange + Sex ~ Year, value.var = "n") # [s]ex[y]ear_[w]ideform[m]ale
+
+#labels for slope chart
+ml15 <- paste(sy_wm$AgeRange, "(",round(sy_wm$"2015"), ")")
+ml16 <- paste("(",round(sy_wm$"2016"),")")
+ml17 <- paste("(",round(sy_wm$"2017"), ")")
+#slopechart
+sy_male <- ggplot(sy_wm) + geom_segment(aes(x=0, xend= 25, y=sy_wm$"2015", yend=sy_wm$"2016", color=AgeRange), size=.75) + 
+  geom_segment(aes(x=25, xend= 50, y=sy_wm$"2016", yend=sy_wm$"2017", color=AgeRange), size=.75) +
+  scale_color_manual(values =c("lightsteelblue1", "lightsteelblue2", "lightsteelblue3","plum1", "plum2", "plum3", "plum4", "palegreen2", "palegreen3"))
+sy_male <- sy_male + xlab("") + ylab("Age Range") +
+  theme(panel.background = element_blank()) +
+  theme(panel.grid=element_blank()) +
+  theme(axis.ticks=element_blank()) +
+  theme(axis.text=element_blank())+
+  theme(panel.border=element_blank()) + xlim(-15,65) + ylim(0, 33)
+sy_male <- sy_male + geom_text(label = ml15, aes(y=sy_wm$"2015", x=0), size = 3, hjust = 1.1) +
+  geom_text(label = ml16, aes(y=sy_wm$"2016", x=25), size = 3) +
+  geom_text(label = ml17, aes(y=sy_wm$"2017", x=50), size = 3, hjust = -.1) +
+  geom_text(label = "2015", x = 0, y = 33, size = 4, hjust = 1.2, color = "cadetblue2") +
+  geom_text(label = "2016", x = 25, y = 33, size = 4, color = "cadetblue3") +
+  geom_text(label = "2017", x = 50, y = 33, size = 4, hjust = -.05, color = "cadetblue4") +
+  labs(title = "Change in # of diagnoses for each age group for males", caption = "Data for 2017 only goes until November - aka incomplete") + th
+#cleanup
+rm(fl15, fl16, fl17, ml15, ml16, ml17)
+
+```
+
+
+```{r fig.align="center", fig.width=5, fig.height=3, echo=FALSE}
+plyear
+```
+
+## Overall Trend
+As can be seen in the above graph, 2016 represented a **36%** increase in gonorrhea diagnoses compared to 2015. 2017 appears to be on the same trajectory. The next couple sections will break down the demographics further. 
+
+\newpage
+# Age curve
+```{r fig.align = "center", fig.width=5, fig.height=3, echo=FALSE}
+agexyear
+```
+
+Splitting this data by age group shows how the age distribution of gonorrhea patients has changed over time. The median age of patients has shifted from 26 in 2015 to 29 in 2017. We are seeing a shift towards more middle-aged patients (35-44 year olds) and an increase in older (55+ years old) patients. 
+
+This trend is more visible in the below slope graph. We can see that, though younger patients still make up the bulk of diagnoses, there have been large jumps in older demographics as well.   
+  
+    
+
+```{r fig.align = "center", fig.width=4,fig.height=5,echo=FALSE}
+agesl
+```
+\newpage
+
+# Gender
+```{r include=FALSE}
+# DONE gender bar graph. Excluding MTF and FTM for ease of display ----
+ageyearg <- na.omit(transmute(gonorrhea, Sex, AgeRange, Year))
+ageyg_mut <- transmute(ageyearg, Sex, Year)
+ageyg_mut <- melt(ageyg_mut, id.vars = c("Year", "Sex"))
+ageyg_mut <- dcast(ageyg_mut, Year ~ Sex, value.var = "Sex")
+ageyg_mut <- mutate(ageyg_mut, Total = Female + Male + 1, "% Female" = round(Female / Total, digits = 2)*100,
+                    "% Male" = round(Male/Total, digits = 2)*100)
+ageyg_mut <- rename(ageyg_mut, "FTM Transgender" = "Female-to-Male Transgender", "MTF Transgender" = "Male-to-Female Transgender")
+
+ageyg <- subset(ageyearg, Sex %in% c("Female", "Male"))
+  
+age_year_gender <- ggplot(ageyg, aes(AgeRange)) + 
+  geom_bar(aes(fill = Year), position = "dodge") + facet_grid(~ Sex) +
+  yearcolor + labs(x = "Age Range", y = "# of patients", title = "Gonorrhea Diagnoses by Age and Gender") + titletheme + th 
+
+```
+
+In the below table, we can see that, across years, despite the increases in the total number of patients, the proportion of gonorrhea diagnoses of each gender remains stable. We can see that, generally, women account for roughly **40%** of diagnoses, and men account for **60%** of diagnoses. This shows that the increase in gonorrhea rates is not being driven by one specific gender group. Due to the low number of respondents (**3** total across the dataset), transgender respondents were not included in next graphs. This was not intended to exclude this marginalized group, but rather for the ease of displaying relevant data. 
+
+```{r fig.align = "center", echo=FALSE}
+kable(ageyg_mut, format = "latex", align = "c", booktabs = T) %>% 
+  column_spec(1, bold = T, width = "6em")  %>%
+  column_spec(2:8, width = "4em") %>%
+  column_spec(6, bold = T, border_right = T)  %>%
+  row_spec(0, angle = 45) %>%
+  kable_styling(position = "center")
+```
+
+Breaking down the age curve by gender reveals the below age curves. We can see, roughly, that the shapes of curves appear very slightly different. However, to further understand the dynamics, this data needs to be further subsetted by sexual orientation. 
+
+```{r fig.align = "center", fig.width=7.5,fig.height=5,echo=FALSE}
+age_year_gender
+```
+\newpage 
+# Sexual Orientation and Gender
+```{r include=FALSE}
+ori_year <- na.omit(transmute(gonorrhea, orientation, AgeRange, Year))
+ori_year <- transmute(ori_year, orientation, Year)
+ori_year <- melt(ori_year, id.vars = c("Year", "orientation"))
+ori_year <- dcast(ori_year, Year ~ orientation, value.var = "orientation")
+ori_year <- transmute(ori_year, Year, straight, gay, bisexual, other, Total = straight + gay + bisexual + other, 
+                      "% straight" = round(straight / Total, digits = 2)*100,
+                      "% gay" = round(gay /Total, digits = 2)*100,
+                      "% bisexual" = round(bisexual /Total, digits = 2)*100)
+
+age_year_orientation <- ggplot(subset(gonorrhea, orientation %in% c("bisexual","gay","straight","other")), aes(orientation)) + geom_bar(aes(fill = Year), position = "dodge") + scale_x_discrete(limits = c("straight","gay", "bisexual","other")) +  yearcolor + labs(x = "Sexual Orientation", y = "# of patients", title = "Gonorrhea Diagnoses by Sexual Orientation") + th + titletheme
+
+age_year_gender_straight <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male") & orientation == "straight"), aes(AgeRange)) + 
+  geom_bar(aes(fill = Year), position = "dodge") +  facet_grid(~ Sex) + yearcolor + labs(x = "Age Range", y = "# of patients", title = "Straight") + th + titletheme + theme(legend.position="none")
+
+age_year_gender_gay <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male") & orientation == "gay"), aes(AgeRange)) + 
+  geom_bar(aes(fill = Year), position = "dodge") + facet_grid(~ Sex) + yearcolor + labs(x = "Age Range", title = "Gay ") + th + titletheme + theme(axis.text.y=element_blank())
+
+age_year_gender_bi <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male") & orientation == "bisexual"), aes(AgeRange)) + 
+  geom_bar(aes(fill = Year), position = "dodge") +  facet_grid(~ Sex) + yearcolor + labs(x = "Age Range", y = "# of patients", title = "Gonorrhea Diagnoses in persons who identify as Bisexual") + th + titletheme
+
+```
+The following graph shows the distribution of sexual orientations among gonorrhea patients. The majority of patients identify as heterosexual (straight). For the purposes of this analysis, we will only be looking at the straight and gay populations. 
+
+As was with the gender data, though the total number of patients in each category have increased, we can see that the relative proportion of patients within each category remains the same. This demonstrates that there is not one particular orientation that is driving the increase in diagnoses; rather, all groups are increasing. 
+
+Discrepancies in total patients per year were due to missing data and lack of reports. An attempt was initially made to classify patients based on the genders of their reported partners, but the decision was made to not proceed with this, as the person's self-identified orientation may be more informative.
+
+```{r fig.align = "center", fig.width=5,fig.height=4,echo=FALSE}
+age_year_orientation
+```
+
+```{r fig.align = "center", echo=FALSE}
+kable(ori_year, format = "latex", align = "c", booktabs = T) %>% 
+  column_spec(1, bold = T, width = "6em")  %>%
+  column_spec(6, bold = T, border_right = T)  %>%
+  kable_styling(position = "center")
+```
+
+
+## Heterosexual population
+Now, looking at the gender split within the "straight orientation category, we see that straight men and women get gonorrhea at roughly the same rates, though the age curves are now markedly different. 
+
+```{r fig.align = "center", fig.width=5,fig.height=4,echo=FALSE}
+age_year_gender_straight
+```
+
+From looking at this graph, it seems that female patients appear to be, on average, younger than the male patients. To test this hypothesis, a one-sided t-test was performed, comparing the mean ages of straight men and women across the years. The results of this t-test are below. It is revealed that in 2015 and 2017, this age difference is statistically significant at the p= 0.05 level. Even in 2016, the results are quite close to significance. (Of course, statistical significance does not always mean practical significance, but neither does lack of statistical significance mean a lack of practical significance.)
+
+This relationship will be explored further. 
+
+```{r fig.align = "center", echo=FALSE}
+ageyg <- na.omit(transmute(gonorrhea, Sex, Age, Year, orientation))
+AgeYearDiff <- list()
+
+AgeYearDiff[[1]] <- t.test(subset(ageyg, Sex == "Female" & Year == "2015" & orientation == "straight")$Age, subset(ageyg, Sex == "Male" & Year == "2015" & orientation == "straight")$Age, alternative = c("less"))
+
+AgeYearDiff[[2]] <- t.test(subset(ageyg, Sex == "Female" & Year == "2016" & orientation == "straight")$Age, subset(ageyg, Sex == "Male" & Year == "2016" & orientation == "straight")$Age, alternative = c("less"))
+
+AgeYearDiff[[3]] <- t.test(subset(ageyg, Sex == "Female" & Year == "2017" & orientation == "straight")$Age, subset(ageyg, Sex == "Male" & Year == "2017" & orientation == "straight")$Age, alternative = c("less"))
+
+AgeYear_ttest <- sapply(AgeYearDiff, function(x) {
+  c(x$estimate[1],
+    x$estimate[2],
+    p.value = x$p.value)
+})
+ayt <- data.frame(AgeYear_ttest)
+colnames(ayt) <- c("2015", "2016", "2017")
+rownames(ayt) <- c("Mean Age (Women)", "Mean Age (Men)", "p-value")
+ayt  <- as.data.frame(t(ayt))
+ayt[1:2] <- round(ayt[1:2], 2)
+ayt[3] <- round(ayt[3],4)
+kable(ayt, format = "latex", align = "c", booktabs = T) %>%
+  kable_styling(position = "center")
+```
+
+## Homosexual population
+
+The following chart displays the age distributions for the "gay" orientation category. It's of note that, of the gay people in this dataset, all of them are men. 
+
+```{r fig.align = "center", fig.width=5,fig.height=4,echo=FALSE}
+age_year_gender_gay
+```
