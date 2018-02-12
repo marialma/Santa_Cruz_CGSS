@@ -100,15 +100,21 @@ gonorrhea$AgeRange <- cut(gonorrhea$Age,
                           include.lowest=TRUE)
 # labels =c("Under 19","19-24","25-29","30-34","35-39","40-44","45-49","50-54","55+"),
 # labels = c(1,2,3,4,5,6,7,8,9),
+titletheme <- theme(plot.title = element_text(hjust=0, vjust=0, family= "Helvetica"), 
+                    axis.text.x = element_text(colour="black", family = "Helvetica"),
+                    axis.text.y = element_text(colour="black", family = "Helvetica"),
+                    text = element_text(family="Helvetica"),
+                    legend.title = element_text(colour="black", family = "Helvetica"),
+                    theme(axis.text.x = element_text(angle = 45, hjust = 1)))
 
-yearcolor = c("cadetblue2", "cadetblue3", "cadetblue4")
+th <- theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+            panel.background = element_blank(), axis.line = element_line(colour = "black"))
+yearcolor <-  scale_fill_manual(values = c("cadetblue2", "cadetblue3", "cadetblue4"))
 # "Analysis"
 # Mostly just interested in generating a bunch of cross tabs and charts on this.
 # TO DO: add size constraints, generate PDFs as well as images
 # Split analyses into: age/gender, jail, drug use
 # crosstabs so can look at % increases, etc
-
-
 # Story I want to tell: ---- 
 # DONE Gonorrhea incidence has increased since 2015 
 # DONE This is what the age structure of gonorrhea looks like
@@ -133,7 +139,7 @@ ay <- melt(agy, id.vars = c("AgeRange"))
 
 
 agexyear <- ggplot(subset(gonorrhea, AgeRange != "NA"), aes(AgeRange)) + geom_bar(stat = "count", aes(fill=Year), position="dodge") + 
-  scale_fill_manual(values = yearcolor)
+  yearcolor
 agexyear <- agexyear + labs(x = "Age Range", y = "# of patients", 
                             title = "Gonorrhea Diagnoses in Santa Cruz County by Age and Year",
                             caption = "Fig 2") + theme_bw()
@@ -190,43 +196,47 @@ agesl <- agesl + geom_text(label = l15, aes(y=agy$"2015", x=0), size = 2.5, hjus
 agesl
 rm(l15,l16,l17)
 
-# DONE gender bar graph. Excluding MTF and FTM for ease of display ----
-ageyg <- na.omit(transmute(gonorrhea, Sex, AgeRange, Year))
+# T-test for gender-age differences by year ----
+ageyg <- na.omit(transmute(gonorrhea, Sex, Age, Year, orientation))
+AgeYearDiff <- list()
+AgeYearDiff[[1]] <- t.test(subset(ageyg, Sex == "Female" & Year == "2015" & orientation == "straight")$Age, 
+                           subset(ageyg, Sex == "Male" & Year == "2015" & orientation == "straight")$Age)
+AgeYearDiff[[2]] <- t.test(subset(ageyg, Sex == "Female" & Year == "2016" & orientation == "straight")$Age, 
+                           subset(ageyg, Sex == "Male" & Year == "2016" & orientation == "straight")$Age)
+AgeYearDiff[[3]] <- t.test(subset(ageyg, Sex == "Female" & Year == "2017" & orientation == "straight")$Age, 
+                           subset(ageyg, Sex == "Male" & Year == "2017" & orientation == "straight")$Age)
+AgeYear_ttest <- sapply(AgeYearDiff, function(x) {
+  c(x$estimate[1],
+    x$estimate[2],
+    p.value = x$p.value)
+})
+#outputting ttest results as a data frame for ease of display
+ayt <- data.frame(AgeYear_ttest)
+colnames(ayt) <- c("2015", "2016", "2017")
+rownames(ayt) <- c("Mean Age for Women", "Mean Age for Men", "p-value")
+ayt  <- as.data.frame(t(ayt))
+ayt[1:2] <- round(ayt[1:2], 2)
+ayt[3] <- round(ayt[3],4)
 
-ageyg_mut <- transmute(ageyg, Sex, Year)
-ageyg_mut2 <- melt(ageyg_mut, id.vars = c("Year", "Sex"))
-ageyg_mut <- melt(ageyg_mut, id.vars = c("Year", "Sex"))
-ageyg_mut <- dcast(ageyg_mut, Year ~ Sex, value.var = "Sex")
+
+male_pt <- subset(ageyg, Sex == "Male")
+male_pt_gay <- subset(male_pt, orientation == "gay")
+male_pt_str <- subset(male_pt, orientation == "straight")
+t.test(male_pt_gay$Age, male_pt_str$Age)
+
+# DONE gender bar graph. Excluding MTF and FTM for ease of display ----
+ageyg_mut <- transmute(ageyg, Sex, Age)
+ageyg_mut <- melt(ageyg_mut, id.vars = c("Age"))
+ageyg_mut <- dcast(ageyg_mut, Age ~ value)
 ageyg_mut <- mutate(ageyg_mut, Total = Female + Male, "Percent Female" = round(Female / Total, digits = 2),
                     "Percent Male" = round(Male/Total, digits = 2))
 ageyg_mut2 <- dcast(ageyg_mut2, Sex ~ Year, value.var = "Year")
 
-ageygstats <- na.omit(transmute(gonorrhea, Sex, Age, Year, orientation))
-ageygstats <- subset(ageygstats, Sex %in% c("Female", "Male") & orientation == "straight")
-
-ageygstats2015 <- subset(ageygstats, Year %in% "2015")
-s15male <- subset(ageygstats2015, Sex %in% "Male")
-s15female <- subset(ageygstats2015, Sex %in% "Female")
-summary(s15female)
-summary(s15male)
-
-
-ageygstats2016 <- subset(ageygstats, Year %in% "2016")
-s16male <- subset(ageygstats2016, Sex %in% "Male")
-s16female <- subset(ageygstats2016, Sex %in% "Female")
-summary(s16female)
-summary(s16male)
-
-ageygstats2017 <- subset(ageygstats, Year %in% "2017")
-s17male <- subset(ageygstats2017, Sex %in% "Male")
-s17female <- subset(ageygstats2017, Sex %in% "Female")
-test <- summary(s17female)
-summary(s17male)
-
 year_gender <- ggplot(ageyg, aes(Year)) + geom_bar(aes(fill=Sex), position = "dodge") +
   scale_fill_manual(values = c("tomato3", "yellowgreen"))
 
-age_year_gender <- ggplot(ageyg, aes(AgeRange)) + 
+ageyearg <- na.omit(transmute(gonorrhea, Sex, AgeRange, Year))
+age_year_gender <- ggplot(ageyearg, aes(AgeRange)) + 
   geom_bar(aes(fill = Year), position = "dodge") + facet_grid(~ Sex) +
   scale_fill_manual(values = c("cadetblue2", "cadetblue3", "cadetblue4"))
 age_year_gender <- age_year_gender + labs(x = "Age Range", y = "# of patients", title = "Gonorrhea Diagnoses in Santa Cruz County by Age, Year, and Gender",
@@ -311,10 +321,34 @@ rm(fl15, fl16, fl17, ml15, ml16, ml17)
 #                     heights = c(5,7), widths = c(3))
 
 
+# fill in missing orientation data? ---- 
+# though this isn't necessarily accurate because their sexual orientation 
+# and reported partners might not mesh up, so not sure how to deal with that
+
+missing_ori <- gonorrhea[is.na(gonorrhea$orientation),]
+missing_ori$orientation = ifelse((missing_ori$Sex == "Female" & missing_ori$partner_male == "Y" & missing_ori$partner_female == "N") | 
+                                   (missing_ori$Sex == "Male" & missing_ori$partner_male == "N" & missing_ori$partner_female == "Y"),
+                                 "straight",
+                                 ifelse((missing_ori$Sex == "Female" & missing_ori$partner_male == "N" & missing_ori$partner_female == "Y") | 
+                                          (missing_ori$Sex == "Male" & missing_ori$partner_male == "Y" & missing_ori$partner_female == "N"),
+                                        "gay",
+                                         ifelse((missing_ori$Sex == "Female" & missing_ori$partner_male == "Y" & missing_ori$partner_female == "Y") | 
+                                                  (missing_ori$Sex == "Male" & missing_ori$partner_male == "Y" & missing_ori$partner_female == "Y"),
+                                                "bisexual", NA)))
+
+
 # gonorrhea by sexual orientations ----
+ori_year <- na.omit(transmute(gonorrhea, orientation, AgeRange, Year))
+ori_year <- transmute(ori_year, orientation, Year)
+ori_year <- melt(ori_year, id.vars = c("Year", "orientation"))
+ori_year <- dcast(ori_year, Year ~ orientation, value.var = "orientation")
+ori_year <- transmute(ori_year, Year, straight, gay, bisexual, other, refused, Total = straight + gay + bisexual + other + refused, 
+                      "% straight" = round(straight / Total, digits = 2)*100,
+                      "% gay" = round(gay /Total, digits = 2)*100,
+                      "% bisexual" = round(bisexual /Total, digits = 2)*100)
+
 age_year_orientation <- ggplot(subset(gonorrhea, orientation %in% c("bisexual","gay","straight","other")), aes(orientation)) + 
-  geom_bar(aes(fill = Year), position = "dodge") + scale_x_discrete(limits = c("straight","gay", "bisexual","other")) +
-  scale_fill_manual(values = yearcolor) + theme_bw()
+  geom_bar(aes(fill = Year), position = "dodge") + scale_x_discrete(limits = c("straight","gay", "bisexual","other")) +  yearcolor + theme_bw()
 age_year_orientation <- age_year_orientation + labs(x = "Sexual Orientation", y = "# of patients", title = "Gonorrhea Diagnoses in Santa Cruz County by Sexual Orientation, and Year",
                                                     caption = "Data for 2017 only goes until November - aka incomplete")
 age_year_orientation
@@ -353,22 +387,16 @@ rm(l15,l16,l17)
 
 # gonorrhea by orientation - looking at gonorrhea rates in only the straight population ----
 age_year_gender_straight <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male") & orientation == "straight"), aes(AgeRange)) + 
-  geom_bar(aes(fill = Year), position = "dodge") +  facet_grid(~ Sex) +
-  scale_fill_manual(values = c("cadetblue2", "cadetblue3", "cadetblue4"))
-age_year_gender_straight <- age_year_gender_straight + labs(x = "Age Range", y = "# of patients", title = "Gonorrhea Diagnoses in Santa Cruz County in persons who identify as Straight",
+  geom_bar(aes(fill = Year), position = "dodge") +  facet_grid(~ Sex) + yearcolor + labs(x = "Age Range", y = "# of patients", title = "Gonorrhea Diagnoses in Santa Cruz County in persons who identify as Straight",
                                                             caption = "Data for 2017 only goes until November - aka incomplete")
 age_year_gender_straight
 
 age_year_gender_gay <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male") & orientation == "gay"), aes(AgeRange)) + 
-  geom_bar(aes(fill = Year), position = "dodge") + facet_grid(~ Sex) +
-  scale_fill_manual(values = c("cadetblue2", "cadetblue3", "cadetblue4"))
-age_year_gender_gay <- age_year_gender_gay + labs(x = "Age Range", y = "# of patients", title = "Gonorrhea Diagnoses in Santa Cruz County in persons who identify as Gay",
+  geom_bar(aes(fill = Year), position = "dodge") + facet_grid(~ Sex) + yearcolor + labs(x = "Age Range", y = "# of patients", title = "Gonorrhea Diagnoses in Santa Cruz County in persons who identify as Gay",
                                                   caption = "Data for 2017 only goes until November - aka incomplete")
 
-age_year_gender_bis <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male") & orientation == "bisexual"), aes(AgeRange)) + 
-  geom_bar(aes(fill = Year), position = "dodge") +   facet_grid(~ Sex) + 
-  scale_fill_manual(values = c("cadetblue2", "cadetblue3", "cadetblue4"))
-age_year_gender_gay <- age_year_gender_gay + labs(x = "Age Range", y = "# of patients", title = "Gonorrhea Diagnoses in Santa Cruz County in persons who identify as Gay",
+age_year_gender_bi <- ggplot(subset(gonorrhea, Sex %in% c("Female","Male") & orientation == "bisexual"), aes(AgeRange)) + 
+  geom_bar(aes(fill = Year), position = "dodge") +   facet_grid(~ Sex) + yearcolor + labs(x = "Age Range", y = "# of patients", title = "Gonorrhea Diagnoses in Santa Cruz County in persons who identify as Gay",
                                                   caption = "Data for 2017 only goes until November - aka incomplete")
 
 age_year_gender_gay
